@@ -105,7 +105,6 @@ python scripts/visualize_object.py scripts/example_object.json
 ```
 
 
-
 ## Citation
 
 If you find this work useful, please consider citing our paper:
@@ -125,3 +124,5 @@ If you find this work useful, please consider citing our paper:
 
 For videos and additional information, visit our [project page](https://embodied-gaussians.github.io/).
 
+## Disclaimer
+This software is provided as a research prototype and is not production-quality software. Please note that the code may contain missing features, bugs and errors. RAI Institute does not offer maintenance or support for this software.
