@@ -1,3 +1,5 @@
+# Copyright (c) 2025 Boston Dynamics AI Institute LLC. All rights reserved.
+
 import marsoom
 import numpy as np
 from scipy.spatial.transform import Rotation as R

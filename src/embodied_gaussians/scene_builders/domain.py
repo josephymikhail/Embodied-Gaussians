@@ -1,3 +1,5 @@
+# Copyright (c) 2025 Boston Dynamics AI Institute LLC. All rights reserved.
+
 from pathlib import Path
 from typing import Literal
 import numpy as np

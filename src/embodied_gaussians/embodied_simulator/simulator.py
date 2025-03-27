@@ -1,3 +1,5 @@
+# Copyright (c) 2025 Boston Dynamics AI Institute LLC. All rights reserved.
+
 from typing import Literal
 import pysegreduce
 from dataclasses import dataclass
@@ -44,6 +46,26 @@ class EmbodiedGaussiansSimulator(Simulator):
             bodies_affected_by_visual_forces=self.bodies_affected_by_visual_forces,
         )
         self.appearance_optimizer = AppearanceOptimizer(self.gaussian_state)
+
+    def get_specific_environment_state(self, env_ind: int):
+        with torch.no_grad():
+            sim = self
+            s = wp.to_torch(sim.state_0).reshape(self.num_envs(), -1, 7)[env_ind]
+            c = wp.to_torch(sim.control).reshape(self.num_envs(), -1)[env_ind]
+            g = sim.gaussian_state.reshape((self.num_envs(), -1, 7)).slice(env_ind).clone()
+            s = wp.from_torch(s)
+            c = wp.from_torch(c)
+            return EmbodiedGaussianState(
+                physics_state=s, physics_control=c, gaussian_state=g
+            )
+    
+    def set_specific_environment_state(self, env_ind: int, state: EmbodiedGaussianState):
+        sim = self
+        with torch.no_grad():
+            wp.to_torch(sim.state_0).reshape(self.num_envs(), -1, 7)[env_ind] = wp.to_torch(state.physics_state)
+            wp.to_torch(sim.control).reshape(self.num_envs(), -1)[env_ind] = wp.to_torch(state.physics_control)
+            g = sim.gaussian_state.reshape((self.num_envs(), -1, 7)).slice(env_ind)
+            g.copy(state.gaussian_state)
 
     def embodied_gaussian_state(self):
         s = self.state_0

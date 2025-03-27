@@ -1,3 +1,5 @@
+# Copyright (c) 2025 Boston Dynamics AI Institute LLC. All rights reserved.
+
 import trio
 from pathlib import Path
 import warp as wp
