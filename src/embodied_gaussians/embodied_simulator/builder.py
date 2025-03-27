@@ -1,3 +1,5 @@
+# Copyright (c) 2025 Boston Dynamics AI Institute LLC. All rights reserved.
+
 import numpy as np
 
 from embodied_gaussians.physics_simulator.builder import ModelBuilder
