@@ -51,4 +51,3 @@ if __name__ == "__main__":
     params = tyro.cli(Params)
     assert params.save_path.suffix == ".json"
     main(params)
-
