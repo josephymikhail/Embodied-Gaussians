@@ -1,38 +1,61 @@
 import cv2
 import numpy as np
 import pyrealsense2 as rs
+import json
+import os
 
-# === Checkerboard configuration ===
-CHECKERBOARD = (5, 8)  # Internal corners (rows, cols)
-SQUARE_SIZE = 0.03556  # meters
+# === USER INPUTS ===
+CHECKERBOARD = (8, 6)  # (columns, rows) of inner corners
+square_size = 0.036  # size of one square in meters
 
-# === Camera intrinsics (from RealSense D435) ===
+# intrinsic parameters 
+#from real sense for 007522062003
+#fx = 607.841552734375
+#fy = 606.5180053710938
+#cx = 319.40252685546875
+#cy = 237.56298828125
+
+#realsense values for 827112070893
 fx = 615.6595458984375
 fy = 615.6107788085938
 cx = 321.5747375488281
 cy = 236.33041381835938
+
+
+#manual calibration values for 007522062003
+#fx = 538.3586
+#fy = 546.76
+#cx = 281.4157
+#cy = 277.938
+#dist_coeffs = np.array([0.2514, -0.78757, 0.01096, -0.02877, 0.43484])
+
 camera_matrix = np.array([[fx, 0, cx],
                           [0, fy, cy],
                           [0,  0,  1]])
-dist_coeffs = np.zeros((4, 1))  # Assuming no distortion
+dist_coeffs = np.array([0,0,0,0])
 
-# === 3D object points in the checkerboard frame ===
-objp = np.zeros((CHECKERBOARD[0] * CHECKERBOARD[1], 3), np.float32)
-objp[:, :2] = np.mgrid[0:CHECKERBOARD[1], 0:CHECKERBOARD[0]].T.reshape(-1, 2)
-objp *= SQUARE_SIZE
+# === PREPARE OBJECT POINTS ===
+objp = np.zeros((CHECKERBOARD[0]*CHECKERBOARD[1], 3), np.float32)
+objp[:, :2] = np.mgrid[0:CHECKERBOARD[0], 0:CHECKERBOARD[1]].T.reshape(-1, 2)
+objp *= square_size
 
-# === Set up RealSense pipeline with the given serial number ===
 pipeline = rs.pipeline()
 config = rs.config()
-config.enable_device('827112070893')
+#breakpoint()
+#007522062003
+#827112070893
+serial_number = '007522062003'
+config.enable_device(serial_number)
 config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-
 pipeline.start(config)
 
 cv2.namedWindow("RealSense Checkerboard", cv2.WINDOW_AUTOSIZE)
+output_freq = 0
+T = np.eye(4)
 
 try:
     while True:
+        output_freq += 1
         frames = pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
         if not color_frame:
@@ -40,15 +63,15 @@ try:
 
         color_image = np.asanyarray(color_frame.get_data())
         gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
-
         ret, corners = cv2.findChessboardCorners(gray, CHECKERBOARD, None)
-        cv2.drawChessboardCorners(color_image, CHECKERBOARD, corners, ret)
 
         if ret:
+
+
             # Refine the corner locations
             corners2 = cv2.cornerSubPix(
                 gray, corners, (11, 11), (-1, -1),
-                criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+                criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 50, 0.0001)
             )
 
             # Solve PnP to get camera pose
@@ -57,24 +80,58 @@ try:
             if success:
                 # Convert to a 4x4 homogeneous transformation matrix
                 R, _ = cv2.Rodrigues(rvec)
-                T = np.eye(4)
+                #T = np.eye(4)
                 T[:3, :3] = R
+                # Convert to inches for better intuition
+                #T[:3, 3] = tvec.ravel() * 39.3701
                 T[:3, 3] = tvec.ravel()
+                inv_T = np.linalg.inv(T)
 
-                print("\nCamera pose (4x4) w.r.t. checkerboard (table):")
-                print(T)
+
+                if output_freq % 150 == 0:
+                    print(T)
 
                 # Draw checkerboard corners on the image
                 cv2.drawChessboardCorners(color_image, CHECKERBOARD, corners2, ret)
 
+                # === REPROJECTION ERROR ===
+                imgpoints2, _ = cv2.projectPoints(objp, rvec, tvec, camera_matrix, dist_coeffs)
+                reprojection_error = cv2.norm(corners2, imgpoints2, cv2.NORM_L2) / len(imgpoints2)
 
-        if not ret:
-            print('checkerboard not found')
-            
+
         cv2.imshow("RealSense Checkerboard", color_image)
+        #press q to exit loop
         if cv2.waitKey(1) & 0xFF == ord('q'):
+            pose = T.tolist()
+            format = {"X_WT": pose}
+            format2 = {serial_number: format}
+            #this can be changed 
+            extrinsics_path = "/home/lab/embodied_gaussians/scripts/extrinsics.json"
+
+            #make sure extrinsics.json has these brackets { } even if 
+            #there is no data yet
+            if os.path.exists(extrinsics_path):
+                with open(extrinsics_path, 'r') as f:
+                    #automatically parses json file as python dictionary
+                    data = json.load(f)
+            else:
+                data = {}
+
+            # Step 2: Update or insert the new pose
+            data[serial_number] = {"X_WT": pose}
+
+            # Step 3: Write back the updated dictionary to the JSON file
+            with open(extrinsics_path, 'w') as f:
+                json.dump(data, f, indent=4)
+    
             break
+
 
 finally:
     pipeline.stop()
     cv2.destroyAllWindows()
+
+#standing behind the camera: pos x axis is to the right, pos y axis is down, pos z axis is forward
+
+
+

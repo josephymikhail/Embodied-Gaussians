@@ -32,11 +32,8 @@ def main(params: Params):
     else:
         params.save_path.parent.mkdir(parents=True, exist_ok=True)
     
-    
     all_extrinsics = read_extrinsics(params.extrinsics)
-    #breakpoint()
     datapoints = get_datapoints_from_live_cameras(all_extrinsics)
-    #breakpoint()
     result = GroundFinder.find_ground(
         params.builder, datapoints, visualize=params.visualize
     )

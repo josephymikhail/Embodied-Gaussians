@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 import typing
-
+import cv2
 import numpy as np
 
 import open3d as o3d
@@ -11,21 +11,30 @@ from embodied_gaussians.scene_builders.domain import MaskedPosedImageAndDepth
 
 @dataclass
 class GroundFinderSettings:
-    points_per_cm: float = 0.8
-    xmin: float = -0.9
-    xmax: float = 0.9
-    ymin: float = -1.0
-    ymax: float = 1.0
+    #parameters include: sampling density, plane dimensions
+    #ransac settings (look into these)
 
-    plane_segment_distance_threshold: float = 0.01
+    points_per_cm: float = 3.5 #0.8
+    xmin: float = -2.0 #-0.9
+    xmax: float = 2.0 #0.9
+    ymin: float = -1.5 #-1.0
+    ymax: float = 1.5 #1.0
+
+    #parameters for ransac plane fitting
+    #distance thershold - how far point can be from plane to qualify as inlier
+    #ransac_n - number of points sampled in each iteration (3 to define plane)
+    #num_iterations - how many times ransac iterates
+    #these are all used in the "fit plane" section
+    plane_segment_distance_threshold: float = 0.005 #0.01
     plane_segment_ransac_n: int = 3
-    plane_segment_num_iterations: int = 1000
+    plane_segment_num_iterations: int = 2000#1000
 
     max_depth: float = 10.0
 
 
 @dataclass
 class GroundFinderResult:
+    #4 numbers define plane (stored in ground_plane.json)
     plane: np.ndarray  # (4,) ax + by + cz + d = 0
     points: np.ndarray
 
@@ -44,19 +53,20 @@ class GroundFinder:
         # ====================
         all_pointclouds = []
         for datapoint in datapoints:
+            print('ran through datapoints loop')
             if datapoint.mask is not None:
                 datapoint.depth[datapoint.mask == False] = 0.0
-
             w = datapoint.depth.shape[1]
             h = datapoint.depth.shape[0]
-            intrinsics = o3d.camera.PinholeCameraIntrinsic(
-                w,
-                h,
-                datapoint.K[0, 0],
-                datapoint.K[1, 1],
-                datapoint.K[0, 2],
-                datapoint.K[1, 2],
-            )
+            #loads intrinsics, check these to see if they match intrinsics.py
+            #breakpoint()
+            intrinsics = o3d.camera.PinholeCameraIntrinsic(w,h,datapoint.K[0, 0],datapoint.K[1, 1],datapoint.K[0, 2],datapoint.K[1, 2],)
+            #intrinsics = o3d.camera.PinholeCameraIntrinsic(640, 480, 538.3586, 546.76, 281.4157, 277.938)
+            #print(w)
+            #print(h)
+            #print(datapoint.K[0, 0])
+            #print(type(intrinsics))
+
             depth_image = o3d.geometry.Image(datapoint.depth)
             if datapoint.image is not None:
                 color_image = o3d.geometry.Image(datapoint.image)
@@ -73,8 +83,19 @@ class GroundFinder:
                     depth_scale=1.0 / datapoint.depth_scale,
                     depth_trunc=settings.max_depth,
                 )
-            pointcloud.transform(datapoint.get_X_WC("opencv"))
+
+            #where is get_X_WC defined? 
+            #breakpoint()
+            #pointcloud.transform(datapoint.get_X_WC("opencv"))
+
+            #going from camera frames to world frames, allows you to merge
+            #views from several cameras
+            T_CW = datapoint.get_X_WC("opencv")
+            T_WC = np.linalg.inv(T_CW)
+            pointcloud.transform(T_WC)
             all_pointclouds.append(pointcloud)
+            pointcloud_np = np.asarray(pointcloud.points)
+            print(pointcloud_np.shape)
 
         final_pointcloud = o3d.geometry.PointCloud()
         for p in all_pointclouds:
@@ -83,12 +104,16 @@ class GroundFinder:
         # ====================
         # FIT PLANE
         # ====================
+        #uses ransac to generate plane, then checks pointcloud
+        #for all points that lie on that plane (these are inliers)
+        #breakpoint()
         plane_model, inliers = final_pointcloud.segment_plane(
             distance_threshold=settings.plane_segment_distance_threshold,
             ransac_n=settings.plane_segment_ransac_n,
             num_iterations=settings.plane_segment_num_iterations,
         )
         inlier_cloud = final_pointcloud.select_by_index(inliers)
+        print("check inlier cloud size")
 
         # ====================
         # GET PLANE POINTCLOUD
@@ -116,14 +141,19 @@ class GroundFinder:
         # ====================
         kdtree = o3d.geometry.KDTreeFlann(inlier_cloud)
         final_points = []
+        print(np.asarray(plane_points.points)[0:10])
         for p in plane_points.points:
             [k, idx, _] = kdtree.search_radius_vector_3d(p, 0.01)
             if k >= 1:
+                print('k =  ' + str(k) + ', p = ' + str(p))
                 final_points.append(p)
         final_points = np.array(final_points)
+        print(type(final_points))
+        print(np.array(final_points).shape)
         plane_points = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(final_points))
 
-        res = GroundFinderResult(plane_model, final_points)
+        res = GroundFinderResult(plane_model, final_points) #original code
+
 
         if visualize:
             origin = o3d.geometry.TriangleMesh.create_coordinate_frame(

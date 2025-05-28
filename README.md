@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Physically Embodied Gaussian Splatting
 
 <div align="left" style="display: left; align-items: center; justify-content: center; gap: 20px;">
@@ -126,3 +127,7 @@ For videos and additional information, visit our [project page](https://embodied
 
 ## Disclaimer
 This software is provided as a research prototype and is not production-quality software. Please note that the code may contain missing features, bugs and errors. RAI Institute does not offer maintenance or support for this software.
+=======
+# embodied_gaussians
+customizing for irom setup
+>>>>>>> origin/main
