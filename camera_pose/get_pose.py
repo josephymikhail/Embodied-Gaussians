@@ -8,46 +8,66 @@ import os
 CHECKERBOARD = (8, 6)  # (columns, rows) of inner corners
 square_size = 0.036  # size of one square in meters
 
-
-#from real sense for 007522062003
-#fx = 607.841552734375
-#fy = 606.5180053710938
-#cx = 319.40252685546875
-#cy = 237.56298828125
-
-#realsense values for 827112070893
-#fx = 615.6595458984375
-#fy = 615.6107788085938
-#cx = 321.5747375488281
-#cy = 236.33041381835938
-
-#realsense values for 327122076541
-#fx = 604.9152221679688
-#fy = 604.6057739257812
-#cx = 328.6421203613281
-#cy = 255.98118591308594
-
-
 #manual calibration values for 827112070893
-fx = 554.637
-fy = 594.6277
-cx = 354.3337
-cy = 329.573
-dist_coeffs = np.array([4.406e-02, 3.3612e-01, 4.5784e-04, 3.164e-02, -5.6377e-01])
+#fx = 637.2325
+#fy = 640.068
+#cx = 328.16088
+#cy = 221.4209
+#dist_coeffs = np.array([-5.52e-02, 2.0616, -6.32195e-03, -1.488937e-03, -9.4295e0])
 
-#old manual calibration values for 007522062003
-#fx = 538.3586
-#fy = 546.76
-#cx = 281.4157
-#cy = 277.938
-#dist_coeffs = np.array([0.2514, -0.78757, 0.01096, -0.02877, 0.43484])
+#manual calibration values for 327122076541
+#fx = 906.2524
+#fy = 910.88
+#cx = 670.619
+#cy = 397.239
+#dist_coeffs = np.array([0.00249979, 0.69496, 0.0077, 0.004496, -2.26346])
+intrinsics1 = np.array([906.2524, 910.88, 670.619, 397.239, 0.00249979, 0.69496, 0.0077, 0.004496, -2.26346])
+
 
 #new manual values for 007522062003
-#fx = 614.559
-#fy = 617.694
-#cx = 319.9279
-#cy = 218.358
-#dist_coeffs = np.array([3.715e-02, 9.0511e-01, -1.247e-02, 1.9958e-03, -4.083e0])
+#fx = 898.489
+#fy = 902.242
+#cx = 644.933
+#cy = 361.7777
+#dist_coeffs = np.array([0.009, 0.83815, 0.0049, 0.005, -2.8492])
+intrinsics2 = np.array([898.489, 902.242, 644.933, 361.7777, 0.009, 0.83815, 0.0049, 0.005, -2.8492])
+
+#manual values for 313522070442
+#fx = 889.12309
+#fy = 892.842
+#cx = 649.01486
+#cy = 383.25678
+#dist_coeffs = np.array([-6.00037e-02, 1.9879e0, 6.765e-03, 2.3826e-03, -8.0174e0])
+intrinsics3 = np.array([889.12309, 892.842, 649.01486, 383.25678, -6.00037e-02, 1.9879e0, 6.765e-03, 2.3826e-03, -8.0174e0])
+
+
+serial_map = {
+    "1": ("327122076541", intrinsics1),
+    "2": ("007522062003", intrinsics2),
+    "3": ("313522070442", intrinsics3)
+}
+
+# Display options
+print("Select a camera by number:")
+print("1. Serial: 327122076541")
+print("2. Serial: 007522062003")
+print("3. Serial: 313522070442")
+
+# Get user input
+choice = input("Enter the number (1, 2, or 3): ").strip()
+
+# Validate and assign
+if choice in serial_map:
+    serial_number, selected_intrinsics = serial_map[choice]
+    fx, fy, cx, cy = selected_intrinsics[:4]
+    dist_coeffs = selected_intrinsics[4:]
+    print(f"Selected serial number: {serial_number}")
+    print(f"fx: {fx}, fy: {fy}, cx: {cx}, cy: {cy}")
+    print(f"Distortion coefficients: {dist_coeffs}")
+else:
+    print("Invalid choice. Please run the script again and select 1, 2, or 3.")
+
+
 
 camera_matrix = np.array([[fx, 0, cx],
                           [0, fy, cy],
@@ -61,13 +81,8 @@ objp *= square_size
 
 pipeline = rs.pipeline()
 config = rs.config()
-#breakpoint()
-#007522062003
-#827112070893
-#327122076541
-serial_number = '827112070893'
 config.enable_device(serial_number)
-config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
 pipeline.start(config)
 
 cv2.namedWindow("RealSense Checkerboard", cv2.WINDOW_AUTOSIZE)
@@ -106,20 +121,21 @@ try:
                 # Convert to inches for better intuition
                 #T[:3, 3] = tvec.ravel() * 39.3701
                 T[:3, 3] = tvec.ravel()
-                #inv_T = np.linalg.inv(T)
-                #T = np.linalg.inv(T)
-
-                #look more into this
                 opencv_to_blender = np.array([
                     [1,  0,  0,  0],
-                    [0,  1,  0,  0],
-                    [0,  0,  1,  0],
+                    [0,  -1,  0,  0],
+                    [0,  0,  -1,  0],
                     [0,  0,  0,  1]
                 ])
+                #invert pose to get camera in world frame (checkerboard frame)
+                #then multiply to rotate from opencv to blender frame 
+                #both of these transformations are crucical to get later scripts working
                 T = np.linalg.inv(T)
                 T = T @ opencv_to_blender
 
-                
+
+                if output_freq % 150 == 0:
+                    print(T)
 
                 # Draw checkerboard corners on the image
                 cv2.drawChessboardCorners(color_image, CHECKERBOARD, corners2, ret)
@@ -127,11 +143,6 @@ try:
                 # === REPROJECTION ERROR ===
                 imgpoints2, _ = cv2.projectPoints(objp, rvec, tvec, camera_matrix, dist_coeffs)
                 reprojection_error = cv2.norm(corners2, imgpoints2, cv2.NORM_L2) / len(imgpoints2)
-
-                if output_freq % 150 == 0:
-                        print(T)
-                        print(reprojection_error)
-
 
 
         cv2.imshow("RealSense Checkerboard", color_image)
