@@ -150,12 +150,8 @@ class PointCloudBodyBuilder:
                 "scales": learning_rates.scales,
             },
         )
-        inv_min_scale = GaussianActivations.inv_scale(
-            torch.tensor(min_scale).cuda()
-        )
-        inv_max_scale = GaussianActivations.inv_scale(
-            torch.tensor(max_scale).cuda()
-        )
+        inv_min_scale = GaussianActivations.inv_scale(torch.tensor(min_scale).cuda())
+        inv_max_scale = GaussianActivations.inv_scale(torch.tensor(max_scale).cuda())
         backgrounds = torch.rand((num_iterations, 3)).float().cuda()
         num_images = gt_data.images.shape[0]
 
@@ -209,7 +205,8 @@ class PointCloudBodyBuilder:
                 height = int(width * aspect)
                 rgb = cv2.resize(rgb, (width, height))
                 depth = cv2.resize(depth, (width, height))
-                cv2.imshow("Colors", rgb)
+                # Convert RGB to BGR for cv2.imshow
+                cv2.imshow("Colors", rgb[:, :, [2, 1, 0]])
                 cv2.imshow("Depth", depth)
                 cv2.waitKey(1)
 
@@ -240,12 +237,12 @@ class PointCloudBodyBuilder:
         valid_depth_pixels = []
         masks = []
         for datapoint in datapoints:
-            assert datapoint.image.shape[1] == width, (
-                "All images must have the same width"
-            )
-            assert datapoint.image.shape[0] == height, (
-                "All images must have the same height"
-            )
+            assert (
+                datapoint.image.shape[1] == width
+            ), "All images must have the same width"
+            assert (
+                datapoint.image.shape[0] == height
+            ), "All images must have the same height"
 
             if datapoint.mask is None:
                 continue

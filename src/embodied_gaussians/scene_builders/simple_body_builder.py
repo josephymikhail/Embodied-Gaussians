@@ -22,14 +22,13 @@ from embodied_gaussians.scene_builders.domain import (
     Ground,
     GaussianLearningRates,
     GaussianActivations,
-    MaskedPosedImageAndDepth
+    MaskedPosedImageAndDepth,
 )
 from embodied_gaussians.scene_builders.warp_utils import find_distant_query_points
 
 from .simple_visualizer import ellipsoid_meshes, sphere_meshes
 
 logger = logging.getLogger(__name__)
-
 
 
 @dataclass
@@ -39,10 +38,14 @@ class SimpleBodyBuilderSettings:
         0.006  # Radius of particles in the resulting body. Choose a radius that represents the minimum geometric feature you want to capture
     )
 
-    training_iterations: int = 1000  # Number of iterations to optimize the particles
-    training_learning_rates: GaussianLearningRates = field(default_factory=lambda: GaussianLearningRates(
-        means=0.0001,
-    ))
+    training_iterations: int = (
+        1000  # 1000  # Number of iterations to optimize the particles
+    )
+    training_learning_rates: GaussianLearningRates = field(
+        default_factory=lambda: GaussianLearningRates(
+            means=0.0001,
+        )
+    )
     opacity_threshold: float = 0.5  # Opacity threshold for optimization
 
     voxel_size: float = (
@@ -52,7 +55,7 @@ class SimpleBodyBuilderSettings:
         0.01  # Method removes points that do not have enough neighbors within this radius
     )
     outlier_nb_points: int = (
-        20  # Method removes points that do not have atleast this many neighbors in the radius
+        20  # 20  # Method removes points that do not have atleast this many neighbors in the radius
     )
     max_depth: float = 2.0
     cohesion_distance: float = 0.002
@@ -73,11 +76,14 @@ class SimpleBodyBuilder:
         # https://openreview.net/pdf?id=AEq0onGrN2 (Figure 2)
 
         # ================= Step 1: Merge all datapoints into a single pointcloud =================
+
         pc = SimpleBodyBuilder._merge_into_pointcloud(datapoints, settings.max_depth)
         if pc is None:
+            print("No pointcloud created from the datapoints")
             return None
 
         # ================ Step 2: Get the bounding box of the pointcloud =================
+
         obb = SimpleBodyBuilder._filter_and_get_bounding_box(
             pc, settings.outlier_radius, settings.outlier_nb_points
         )
@@ -91,6 +97,7 @@ class SimpleBodyBuilder:
         )
 
         # ================ Step 4: Prune points not in masks =================
+
         mask = SimpleBodyBuilder._prune_points_not_in_masks(sphere_means, datapoints)
         sphere_means = sphere_means[mask]
         if sphere_means.shape[0] == 0:
@@ -98,6 +105,7 @@ class SimpleBodyBuilder:
             return None
 
         # ================ Step 5: Prune points below ground =================
+
         if settings.ground is not None:
             sphere_means = SimpleBodyBuilder._prune_points_below_ground(
                 sphere_means, settings.ground
@@ -112,9 +120,7 @@ class SimpleBodyBuilder:
                 [
                     pc,
                     obb,
-                    *sphere_meshes(
-                        sphere_means, settings.particle_radius
-                    ),
+                    *sphere_meshes(sphere_means, settings.particle_radius),
                 ]
             )
 
@@ -133,7 +139,9 @@ class SimpleBodyBuilder:
         )
 
         if len(particles.means) == 0:
-            logger.warning("No points left after particle optimization. Something went wrong.")
+            logger.warning(
+                "No points left after particle optimization. Something went wrong."
+            )
             return None
 
         if visualize:
@@ -154,8 +162,8 @@ class SimpleBodyBuilder:
             num_iterations=settings.training_iterations,
             learning_rates=settings.training_learning_rates,
             datapoints=datapoints,
-            min_scale=0.5*settings.particle_radius,
-            max_scale=2.0*settings.particle_radius,
+            min_scale=0.5 * settings.particle_radius,
+            max_scale=2.0 * settings.particle_radius,
             max_depth=settings.max_depth,
             visualize=visualize,
         )
@@ -164,7 +172,6 @@ class SimpleBodyBuilder:
         )
         gaussians = gaussians.mask(~mask)
 
-
         # ================ Step 8: Convert to body frame =================
         X_WB = SimpleBodyBuilder._convert_to_body_frame(gaussians, particles)
 
@@ -172,11 +179,13 @@ class SimpleBodyBuilder:
             o3d.visualization.draw_geometries(
                 [
                     o3d.geometry.TriangleMesh.create_coordinate_frame(0.1),
-                    *sphere_meshes(particles.means, settings.particle_radius, particles.colors),
+                    *sphere_meshes(
+                        particles.means, settings.particle_radius, particles.colors
+                    ),
                     *ellipsoid_meshes(gaussians),
                 ]
             )
-        
+
         body = Body(
             name=name,
             X_WB=X_WB.tolist(),
@@ -185,7 +194,6 @@ class SimpleBodyBuilder:
         )
 
         return body
-
 
     @staticmethod
     def _filter_and_get_bounding_box(
@@ -206,8 +214,7 @@ class SimpleBodyBuilder:
 
     @staticmethod
     def _merge_into_pointcloud(
-        datapoints: list[MaskedPosedImageAndDepth], 
-        max_depth: float
+        datapoints: list[MaskedPosedImageAndDepth], max_depth: float
     ) -> o3d.geometry.PointCloud | None:
         all_pointclouds = []
         for datapoint in datapoints:
@@ -236,6 +243,10 @@ class SimpleBodyBuilder:
                     depth_scale=1.0 / datapoint.depth_scale,
                     depth_trunc=max_depth,
                 )
+
+            # X_CW = datapoint.X_WC
+            # X_WC = np.linalg.inv(X_CW)
+
             X_WC = datapoint.X_WC @ np.array(
                 [[1, 0, 0, 0.0], [0, -1, 0, 0.0], [0, 0, -1, 0.0], [0.0, 0.0, 0.0, 1.0]]
             )  # rotate areound x axis to make it in opencv standard
@@ -335,8 +346,10 @@ class SimpleBodyBuilder:
         params = SimpleBodyBuilder._create_initial_gaussian_state(
             initial_points, radius
         )
+        gt_data = SimpleBodyBuilder._get_rasterization_groundtruth(
+            datapoints, max_depth
+        )
 
-        gt_data = SimpleBodyBuilder._get_rasterization_groundtruth(datapoints, max_depth)
         optimizers = SimpleBodyBuilder._create_optimizers_for_params(
             params,
             {
@@ -388,7 +401,9 @@ class SimpleBodyBuilder:
                 rgb = render_colors[..., :3].detach().cpu().numpy()
                 for cam in range(rgb.shape[0]):
                     cv2.imshow(f"color_{cam}", rgb[cam])
-                    cv2.imshow(f"groundtruth_{cam}", gt_data.images[cam].detach().cpu().numpy())
+                    cv2.imshow(
+                        f"groundtruth_{cam}", gt_data.images[cam].detach().cpu().numpy()
+                    )
                     break
                 cv2.waitKey(1)
 
@@ -412,9 +427,18 @@ class SimpleBodyBuilder:
 
         return Particles(
             means=params["means"][mask].detach().cpu().numpy(),
-            quats=GaussianActivations.quat(params["quats"][mask]).detach().cpu().numpy(),
-            radii=GaussianActivations.scale(params["scales"][mask]).detach().cpu().numpy()[..., 0],
-            colors=GaussianActivations.color(params["colors"][mask]).detach().cpu().numpy(),
+            quats=GaussianActivations.quat(params["quats"][mask])
+            .detach()
+            .cpu()
+            .numpy(),
+            radii=GaussianActivations.scale(params["scales"][mask])
+            .detach()
+            .cpu()
+            .numpy()[..., 0],
+            colors=GaussianActivations.color(params["colors"][mask])
+            .detach()
+            .cpu()
+            .numpy(),
         )
 
     @staticmethod
@@ -435,7 +459,9 @@ class SimpleBodyBuilder:
             initial_points, radius
         )
 
-        gt_data = SimpleBodyBuilder._get_rasterization_groundtruth(datapoints, max_depth=max_depth)
+        gt_data = SimpleBodyBuilder._get_rasterization_groundtruth(
+            datapoints, max_depth=max_depth
+        )
         optimizers = SimpleBodyBuilder._create_optimizers_for_params(
             params,
             {
@@ -446,8 +472,12 @@ class SimpleBodyBuilder:
                 "scales": learning_rates.scales,
             },
         )
-        inv_min_scale = GaussianActivations.inv_scale(torch.tensor([min_scale, min_scale, min_scale]).cuda())
-        inv_max_scale = GaussianActivations.inv_scale(torch.tensor([max_scale, max_scale, max_scale]).cuda())
+        inv_min_scale = GaussianActivations.inv_scale(
+            torch.tensor([min_scale, min_scale, min_scale]).cuda()
+        )
+        inv_max_scale = GaussianActivations.inv_scale(
+            torch.tensor([max_scale, max_scale, max_scale]).cuda()
+        )
         backgrounds = torch.rand((num_iterations, 3)).float().cuda()
         num_images = gt_data.images.shape[0]
 
@@ -476,7 +506,7 @@ class SimpleBodyBuilder:
 
             for optimizer in optimizers.values():
                 optimizer.step()
-            
+
             params["scales"].detach().clamp_(inv_min_scale, inv_max_scale)
 
             if visualize and i % 100 == 0:
@@ -490,15 +520,17 @@ class SimpleBodyBuilder:
         if visualize:
             cv2.destroyAllWindows()
 
-        
         return Gaussians(
             means=params["means"].detach().cpu().numpy(),
             quats=GaussianActivations.quat(params["quats"]).detach().cpu().numpy(),
             scales=GaussianActivations.scale(params["scales"]).detach().cpu().numpy(),
-            opacities=GaussianActivations.opacity(params["opacities"]).detach().cpu().numpy(),
+            opacities=GaussianActivations.opacity(params["opacities"])
+            .detach()
+            .cpu()
+            .numpy(),
             colors=GaussianActivations.color(params["colors"]).detach().cpu().numpy(),
         )
-    
+
     @staticmethod
     def _convert_to_body_frame(gaussians: Gaussians, particles: Particles):
         pc = o3d.geometry.PointCloud()
@@ -584,9 +616,10 @@ class SimpleBodyBuilder:
                 )
                 xyz.add_(deltas)
 
-
     @staticmethod
-    def _get_rasterization_groundtruth(datapoints: list[MaskedPosedImageAndDepth], max_depth: float):
+    def _get_rasterization_groundtruth(
+        datapoints: list[MaskedPosedImageAndDepth], max_depth: float
+    ):
         X_CWs = []
         Ks = []
         gts = []
@@ -617,6 +650,9 @@ class SimpleBodyBuilder:
             mask = torch.from_numpy(datapoint.mask).cuda()
             masks.append(mask)
 
+            # breakpoint()
+            # print("Image shape:", datapoint.image.shape)
+
             image = torch.from_numpy(datapoint.image).float().cuda() / 255.0
             image[datapoint.mask == 0, :] = 0.0
             depth = (
@@ -635,7 +671,16 @@ class SimpleBodyBuilder:
 
         return namedtuple(
             "GroundTruth",
-            ["images", "depths", "X_CWs", "Ks", "depth_masks", "masks", "width", "height"],
+            [
+                "images",
+                "depths",
+                "X_CWs",
+                "Ks",
+                "depth_masks",
+                "masks",
+                "width",
+                "height",
+            ],
         )(gts, depth_gts, X_CWs, Ks, depth_masks, masks, width, height)
 
     @staticmethod
@@ -683,8 +728,6 @@ class SimpleBodyBuilder:
             assert name in params, f"Name {name} not in params"
             optimizers[name] = torch.optim.Adam([params[name]], lr=learning_rate)
         return optimizers
-    
-
 
 
 @wp.kernel

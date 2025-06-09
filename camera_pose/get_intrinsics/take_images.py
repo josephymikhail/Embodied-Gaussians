@@ -8,7 +8,9 @@ SAVE_DIR = "/home/lab/embodied_gaussians/camera_pose/get_intrinsics"
 
 pipeline = rs.pipeline()
 config = rs.config()
-config.enable_device('007522062003')
+# 827112070893
+# 007522062003
+config.enable_device("007522062003")
 config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
 pipeline.start(config)
 
@@ -23,12 +25,12 @@ try:
 
         cv2.imshow("RealSense Color", color_image)
         key = cv2.waitKey(1)
-        if key == ord('s'):
+        if key == ord("s"):
             filename = f"{SAVE_DIR}/image_{i:02d}.png"
             cv2.imwrite(filename, color_image)
             print(f"Saved {filename}")
             i += 1
-        elif key == ord('q'):
+        elif key == ord("q"):
             break
 finally:
     pipeline.stop()

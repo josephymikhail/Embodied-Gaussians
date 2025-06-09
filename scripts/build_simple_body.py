@@ -67,10 +67,8 @@ def main(params: Params):
 
     extrinsics = read_extrinsics(params.extrinsics)
     if not params.offline:
-        breakpoint()
-        datapoints = get_datapoints_from_live_cameras(
-            extrinsics
-        )
+        # breakpoint()
+        datapoints = get_datapoints_from_live_cameras(extrinsics)
         print(type(datapoints))
         if params.save_posed_images:
             save_posed_images(f"temp/posed_images/{name}.npz", datapoints)
