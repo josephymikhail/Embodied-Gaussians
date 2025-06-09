@@ -3,6 +3,7 @@ import numpy as np
 import pyrealsense2 as rs
 import json
 import os
+from scipy.spatial.transform import Rotation as R
 
 # === USER INPUTS ===
 CHECKERBOARD = (8, 6)  # (columns, rows) of inner corners
@@ -115,9 +116,9 @@ try:
 
             if success:
                 # Convert to a 4x4 homogeneous transformation matrix
-                R, _ = cv2.Rodrigues(rvec)
+                rot, _ = cv2.Rodrigues(rvec)
                 #T = np.eye(4)
-                T[:3, :3] = R
+                T[:3, :3] = rot
                 # Convert to inches for better intuition
                 #T[:3, 3] = tvec.ravel() * 39.3701
                 T[:3, 3] = tvec.ravel()
@@ -135,7 +136,10 @@ try:
 
 
                 if output_freq % 150 == 0:
-                    print(T)
+                    euler = R.from_matrix(rot).as_euler('zyx')
+                    euler = euler * 180 / np.pi  # Convert radians to degrees
+                    print("euler = " + str(euler))
+                    print("translation vector = " + str(tvec.ravel()))
 
                 # Draw checkerboard corners on the image
                 cv2.drawChessboardCorners(color_image, CHECKERBOARD, corners2, ret)

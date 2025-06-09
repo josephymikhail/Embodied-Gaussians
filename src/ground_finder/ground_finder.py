@@ -11,30 +11,30 @@ from embodied_gaussians.scene_builders.domain import MaskedPosedImageAndDepth
 
 @dataclass
 class GroundFinderSettings:
-    #parameters include: sampling density, plane dimensions
-    #ransac settings (look into these)
+    # parameters include: sampling density, plane dimensions
+    # ransac settings (look into these)
 
-    points_per_cm: float = 3.5 #0.8
-    xmin: float = -2.0 #-0.9
-    xmax: float = 2.0 #0.9
-    ymin: float = -1.5 #-1.0
-    ymax: float = 1.5 #1.0
+    points_per_cm: float = 0.8
+    xmin: float = -0.9
+    xmax: float = 0.9
+    ymin: float = -1.0
+    ymax: float = 1.0
 
-    #parameters for ransac plane fitting
-    #distance thershold - how far point can be from plane to qualify as inlier
-    #ransac_n - number of points sampled in each iteration (3 to define plane)
-    #num_iterations - how many times ransac iterates
-    #these are all used in the "fit plane" section
-    plane_segment_distance_threshold: float = 0.005 #0.01
+    # parameters for ransac plane fitting
+    # distance thershold - how far point can be from plane to qualify as inlier
+    # ransac_n - number of points sampled in each iteration (3 to define plane)
+    # num_iterations - how many times ransac iterates
+    # these are all used in the "fit plane" section
+    plane_segment_distance_threshold: float = 0.001  # 0.01
     plane_segment_ransac_n: int = 3
-    plane_segment_num_iterations: int = 2000#1000
+    plane_segment_num_iterations: int = 600  # 1000
 
     max_depth: float = 10.0
 
 
 @dataclass
 class GroundFinderResult:
-    #4 numbers define plane (stored in ground_plane.json)
+    # 4 numbers define plane (stored in ground_plane.json)
     plane: np.ndarray  # (4,) ax + by + cz + d = 0
     points: np.ndarray
 
@@ -53,19 +53,26 @@ class GroundFinder:
         # ====================
         all_pointclouds = []
         for datapoint in datapoints:
-            print('ran through datapoints loop')
+            print("ran through datapoints loop")
             if datapoint.mask is not None:
                 datapoint.depth[datapoint.mask == False] = 0.0
             w = datapoint.depth.shape[1]
             h = datapoint.depth.shape[0]
-            #loads intrinsics, check these to see if they match intrinsics.py
-            #breakpoint()
-            intrinsics = o3d.camera.PinholeCameraIntrinsic(w,h,datapoint.K[0, 0],datapoint.K[1, 1],datapoint.K[0, 2],datapoint.K[1, 2],)
-            #intrinsics = o3d.camera.PinholeCameraIntrinsic(640, 480, 538.3586, 546.76, 281.4157, 277.938)
-            #print(w)
-            #print(h)
-            #print(datapoint.K[0, 0])
-            #print(type(intrinsics))
+            # loads intrinsics, check these to see if they match intrinsics.py
+            # breakpoint()
+            intrinsics = o3d.camera.PinholeCameraIntrinsic(
+                w,
+                h,
+                datapoint.K[0, 0],
+                datapoint.K[1, 1],
+                datapoint.K[0, 2],
+                datapoint.K[1, 2],
+            )
+            # intrinsics = o3d.camera.PinholeCameraIntrinsic(640, 480, 538.3586, 546.76, 281.4157, 277.938)
+            # print(w)
+            # print(h)
+            # print(datapoint.K[0, 0])
+            # print(type(intrinsics))
 
             depth_image = o3d.geometry.Image(datapoint.depth)
             if datapoint.image is not None:
@@ -84,24 +91,24 @@ class GroundFinder:
                     depth_trunc=settings.max_depth,
                 )
 
-            #where is get_X_WC defined? 
-            #breakpoint()
-            #pointcloud.transform(datapoint.get_X_WC("opencv"))
+            # where is get_X_WC defined?
+            # breakpoint()
+            # pointcloud.transform(datapoint.get_X_WC("opencv"))
 
-            #going from camera frames to world frames, allows you to merge
-            #views from several cameras
-            T_CW = datapoint.get_X_WC("opencv") #not sure if this should be opencv or blender
-            T_WC = np.linalg.inv(T_CW)
-            pointcloud.transform(T_WC)
+            # going from camera frames to world frames, allows you to merge
+            # views from several cameras
+            # T_CW = datapoint.get_X_WC("blender") #not sure if this should be opencv or blender
+            # T_WC = np.linalg.inv(T_CW)
+            # pointcloud.transform(T_WC)
 
-            #original line below
-            #pointcloud.transform(datapoint.get_X_WC("opencv"))
+            # original line below
+            # pointcloud.transform(datapoint.get_X_WC("opencv"))
 
-            #pointcloud.transform(datapoint.get_X_WC("blender"))
+            pointcloud.transform(datapoint.get_X_WC("opencv"))
             all_pointclouds.append(pointcloud)
-            
-            #pointcloud_np = np.asarray(pointcloud.points)
-            #print(pointcloud_np.shape)
+
+            # pointcloud_np = np.asarray(pointcloud.points)
+            # print(pointcloud_np.shape)
 
         final_pointcloud = o3d.geometry.PointCloud()
         for p in all_pointclouds:
@@ -110,9 +117,9 @@ class GroundFinder:
         # ====================
         # FIT PLANE
         # ====================
-        #uses ransac to generate plane, then checks pointcloud
-        #for all points that lie on that plane (these are inliers)
-        #breakpoint()
+        # uses ransac to generate plane, then checks pointcloud
+        # for all points that lie on that plane (these are inliers)
+        # breakpoint()
         plane_model, inliers = final_pointcloud.segment_plane(
             distance_threshold=settings.plane_segment_distance_threshold,
             ransac_n=settings.plane_segment_ransac_n,
@@ -151,15 +158,14 @@ class GroundFinder:
         for p in plane_points.points:
             [k, idx, _] = kdtree.search_radius_vector_3d(p, 0.01)
             if k >= 1:
-                print('k =  ' + str(k) + ', p = ' + str(p))
+                print("k =  " + str(k) + ", p = " + str(p))
                 final_points.append(p)
         final_points = np.array(final_points)
         print(type(final_points))
         print(np.array(final_points).shape)
         plane_points = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(final_points))
 
-        res = GroundFinderResult(plane_model, final_points) #original code
-
+        res = GroundFinderResult(plane_model, final_points)  # original code
 
         if visualize:
             origin = o3d.geometry.TriangleMesh.create_coordinate_frame(
