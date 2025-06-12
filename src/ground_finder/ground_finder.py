@@ -14,7 +14,7 @@ class GroundFinderSettings:
     # parameters include: sampling density, plane dimensions
     # ransac settings (look into these)
 
-    points_per_cm: float = 0.8
+    points_per_cm: float = 0.8  # 0.8
     xmin: float = -0.9
     xmax: float = 0.9
     ymin: float = -1.0
@@ -25,9 +25,9 @@ class GroundFinderSettings:
     # ransac_n - number of points sampled in each iteration (3 to define plane)
     # num_iterations - how many times ransac iterates
     # these are all used in the "fit plane" section
-    plane_segment_distance_threshold: float = 0.001  # 0.01
+    plane_segment_distance_threshold: float = 0.005  # 0.01
     plane_segment_ransac_n: int = 3
-    plane_segment_num_iterations: int = 600  # 1000
+    plane_segment_num_iterations: int = 1000  # 1000
 
     max_depth: float = 10.0
 
@@ -60,15 +60,18 @@ class GroundFinder:
             h = datapoint.depth.shape[0]
             # loads intrinsics, check these to see if they match intrinsics.py
             # breakpoint()
+
+            # intrinsics = o3d.camera.PinholeCameraIntrinsic(
+            #     w,
+            #     h,
+            #     datapoint.K[0, 0],
+            #     datapoint.K[1, 1],
+            #     datapoint.K[0, 2],
+            #     datapoint.K[1, 2],
+            # )
             intrinsics = o3d.camera.PinholeCameraIntrinsic(
-                w,
-                h,
-                datapoint.K[0, 0],
-                datapoint.K[1, 1],
-                datapoint.K[0, 2],
-                datapoint.K[1, 2],
+                1280, 720, 906.2524, 910.88, 670.619, 397.239
             )
-            # intrinsics = o3d.camera.PinholeCameraIntrinsic(640, 480, 538.3586, 546.76, 281.4157, 277.938)
             # print(w)
             # print(h)
             # print(datapoint.K[0, 0])
@@ -90,31 +93,25 @@ class GroundFinder:
                     depth_scale=1.0 / datapoint.depth_scale,
                     depth_trunc=settings.max_depth,
                 )
+            pointcloud.transform(datapoint.get_X_WC("opencv"))  # originally opencv
+            # trying to manually rotate pointcloud to deal with "no points after pruning below ground" error during object generation
+            R = pointcloud.get_rotation_matrix_from_xyz((0, np.pi, np.pi))
+            pointcloud.rotate(R, center=(0, 0, 0))
 
-            # where is get_X_WC defined?
-            # breakpoint()
-            # pointcloud.transform(datapoint.get_X_WC("opencv"))
-
-            # going from camera frames to world frames, allows you to merge
-            # views from several cameras
-            # T_CW = datapoint.get_X_WC("blender") #not sure if this should be opencv or blender
-            # T_WC = np.linalg.inv(T_CW)
-            # pointcloud.transform(T_WC)
-
-            # original line below
-            # pointcloud.transform(datapoint.get_X_WC("opencv"))
-
-            pointcloud.transform(datapoint.get_X_WC("opencv"))
             all_pointclouds.append(pointcloud)
-            pointcloud_np = np.asarray(pointcloud.points)
-            print(pointcloud_np.shape)
-
-            # pointcloud_np = np.asarray(pointcloud.points)
-            # print(pointcloud_np.shape)
 
         final_pointcloud = o3d.geometry.PointCloud()
         for p in all_pointclouds:
             final_pointcloud += p
+        # breakpoint()
+
+        # looking back at my old ground planes, somehow the z axis flipped?
+        # i think this is why ive been getting no points when pruning below ground
+        # for now i am just manually flipping z coordinates
+        # this is not a good fix so later i will look into this more
+        # points = np.asarray(final_pointcloud.points)
+        # points[:, 2] *= -1
+        # final_pointcloud.points = o3d.utility.Vector3dVector(points)
 
         # ====================
         # FIT PLANE
@@ -171,7 +168,9 @@ class GroundFinder:
 
         if visualize:
             origin = o3d.geometry.TriangleMesh.create_coordinate_frame(
-                size=1.0, origin=[0, 0, 0]
+                # this line is where the origin is being visualized
+                size=1.0,
+                origin=[0, 0, 0],
             )
             inlier_cloud.paint_uniform_color([0.0, 1.0, 0.0])
             o3d.visualization.draw_geometries([plane_points, origin, *all_pointclouds])

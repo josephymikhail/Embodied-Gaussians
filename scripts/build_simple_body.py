@@ -10,6 +10,7 @@ from embodied_gaussians.scene_builders.domain import (
 from embodied_gaussians import SimpleBodyBuilder, SimpleBodyBuilderSettings
 from embodied_gaussians.utils.utils import read_extrinsics, read_ground
 from utils import get_datapoints_from_live_cameras
+from utils import get_datapoints_from_offline_images
 
 
 @dataclass
@@ -68,8 +69,9 @@ def main(params: Params):
     extrinsics = read_extrinsics(params.extrinsics)
     if not params.offline:
         # breakpoint()
-        datapoints = get_datapoints_from_live_cameras(extrinsics)
-        print(type(datapoints))
+        # datapoints = get_datapoints_from_live_cameras(extrinsics)
+        datapoints = get_datapoints_from_offline_images(extrinsics)
+        # print(type(datapoints))
         if params.save_posed_images:
             save_posed_images(f"temp/posed_images/{name}.npz", datapoints)
     else:

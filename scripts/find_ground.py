@@ -9,6 +9,7 @@ import tyro
 from ground_finder import GroundFinder, GroundFinderSettings
 from embodied_gaussians.utils.utils import read_extrinsics
 from utils import get_datapoints_from_live_cameras
+from utils import get_datapoints_from_offline_images
 
 
 @dataclass
@@ -31,9 +32,11 @@ def main(params: Params):
             return
     else:
         params.save_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     all_extrinsics = read_extrinsics(params.extrinsics)
-    datapoints = get_datapoints_from_live_cameras(all_extrinsics)
+    # datapoints = get_datapoints_from_live_cameras(all_extrinsics)
+    # breakpoint()
+    datapoints = get_datapoints_from_offline_images(all_extrinsics)
     result = GroundFinder.find_ground(
         params.builder, datapoints, visualize=params.visualize
     )

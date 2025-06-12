@@ -163,10 +163,11 @@ try:
                 T = T @ opencv_to_blender
 
                 if output_freq % 150 == 0:
+                    rot = T[:3, :3]
                     euler = R.from_matrix(rot).as_euler("zyx")
                     euler = euler * 180 / np.pi  # Convert radians to degrees
                     print("euler = " + str(euler))
-                    print("translation vector = " + str(tvec.ravel()))
+                    print("translation vector = " + str(T[:3, 3]))
 
                 # Draw checkerboard corners on the image
                 cv2.drawChessboardCorners(color_image, CHECKERBOARD, corners2, ret)
@@ -180,14 +181,17 @@ try:
                 )
 
         cv2.imshow("RealSense Checkerboard", color_image)
-        # press q to exit loop
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        # press c to capture and save pose
+        if cv2.waitKey(1) & 0xFF == ord("c"):
+            image_number = input("Enter image number: ")
             pose = T.tolist()
             format = {"X_WT": pose}
-            format2 = {serial_number: format}
+            format2 = {image_number: format}
             # this can be changed
-            extrinsics_path = "/home/lab/embodied_gaussians/scripts/extrinsics.json"
-
+            # extrinsics_path = "/home/lab/embodied_gaussians/scripts/extrinsics.json"
+            extrinsics_path = (
+                "/home/lab/embodied_gaussians/scripts/extrinsics_offline.json"
+            )
             # make sure extrinsics.json has these brackets { } even if
             # there is no data yet
             if os.path.exists(extrinsics_path):
@@ -198,12 +202,15 @@ try:
                 data = {}
 
             # Step 2: Update or insert the new pose
-            data[serial_number] = {"X_WT": pose}
+            data[image_number] = {"X_WT": pose}
 
             # Step 3: Write back the updated dictionary to the JSON file
             with open(extrinsics_path, "w") as f:
                 json.dump(data, f, indent=4)
-
+            print("Pose updated")
+        # press q to quit
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            print("Quitting")
             break
 
 
